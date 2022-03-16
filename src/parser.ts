@@ -1,6 +1,8 @@
 import type { RawTransaction } from "./types";
 import { sendJSON, tryFetching } from "./lib/net";
 
+declare const TOKENS: KVNamespace;
+
 export const parseTransaction = async (signature: string) => {
   const raw = await tryFetching<RawTransaction>({
     method: "getTransaction",
@@ -21,11 +23,7 @@ export const parseTransaction = async (signature: string) => {
 
   const owners = {};
 
-  const accounts = await tryFetching<{
-    data: {
-      owner: string;
-    };
-  }>({
+  const accounts = await tryFetching<any>({
     method: "getMultipleAccounts",
     params: [missingOwners, { encoding: "jsonParsed" }],
   });
@@ -34,7 +32,8 @@ export const parseTransaction = async (signature: string) => {
     owners[missingOwners[i]] = a.data.parsed.info.owner;
   });
 
-  raw.meta.postTokenBalances.forEach((po) => {
+  // raw.meta.postTokenBalances.forEach((po) => {
+  for (const po of raw.meta.postTokenBalances) {
     const prev = raw.meta.preTokenBalances.find(
       (p) => p.accountIndex === po.accountIndex
     );
@@ -57,15 +56,15 @@ export const parseTransaction = async (signature: string) => {
 
       if (difference > 0) {
         changes[owner] ??= [];
-        changes[owner].push(`${verb} ${difference} ${po.mint}`);
+        changes[owner].push(`${verb} ${difference} ${await mint(po.mint)}`);
       }
     } else if (po.uiTokenAmount.uiAmount > 0) {
       changes[owner] ??= [];
       changes[owner].push(
-        `RECEIVED ${po.uiTokenAmount.uiAmountString} ${po.mint}`
+        `RECEIVED ${po.uiTokenAmount.uiAmountString} ${await mint(po.mint)}`
       );
     }
-  });
+  }
 
   raw.meta.postBalances.forEach((po, i) => {
     // ignore if owner is Token program
@@ -89,4 +88,10 @@ export const parseTransaction = async (signature: string) => {
     changes,
     raw,
   });
+};
+
+const mint = async (mintAddress: string) => {
+  const tokenList: any = await TOKENS.get("list", { type: "json" });
+  console.log({ tokenList });
+  return tokenList?.tokens[mintAddress]?.symbol ?? mintAddress;
 };

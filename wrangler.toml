@@ -1,10 +1,12 @@
 name = "txparser"
 type = "javascript"
-zone_id = ""
-account_id = ""
 route = ""
 workers_dev = true
 compatibility_date = "2022-03-15"
+
+kv_namespaces = [
+  { binding = "TOKENS", preview_id = "a4aa64106d944fabad4b11187b712602", id = "cf203a4ce6f4462da172bc057af91bd5" }
+]
 
 [build]
 command = "pnpm install && pnpm build"
