@@ -1,11 +1,3 @@
-export const sendJSON = (payload) => {
-  return new Response(JSON.stringify(payload), {
-    headers: {
-      "content-type": "application/json",
-    },
-  });
-};
-
 export const tryFetching = async <K>(payload): Promise<K> => {
   const weightings = {
     // "https://hidden-fragrant-sound.solana-mainnet.quiknode.pro/452fef69b9380554003a55cda8b393bdd23653c8/": 5,

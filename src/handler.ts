@@ -1,4 +1,4 @@
-import { sendJSON } from "./lib/net";
+import { sendJSON } from "@gootools/cloudflare-stuff";
 import { parseTransaction } from "./parser";
 
 export async function handleRequest(request: Request): Promise<Response> {

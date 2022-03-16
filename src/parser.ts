@@ -1,5 +1,6 @@
 import type { RawTransaction } from "./types";
-import { sendJSON, tryFetching } from "./lib/net";
+import { tryFetching } from "./lib/net";
+import { sendJSON } from "@gootools/cloudflare-stuff";
 
 declare const TOKENS: KVNamespace;
 
@@ -92,6 +93,5 @@ export const parseTransaction = async (signature: string) => {
 
 const mint = async (mintAddress: string) => {
   const tokenList: any = await TOKENS.get("list", { type: "json" });
-  console.log({ tokenList });
   return tokenList?.tokens[mintAddress]?.symbol ?? mintAddress;
 };
