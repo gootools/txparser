@@ -6,15 +6,15 @@ export interface RawTransaction {
 }
 
 export interface Meta {
-  err: any;
+  err: unknown;
   fee: number;
   innerInstructions: InnerInstruction[];
   logMessages: string[];
   postBalances: number[];
-  postTokenBalances: PostTokenBalance[];
+  postTokenBalances: TokenBalance[];
   preBalances: number[];
-  preTokenBalances: PreTokenBalance[];
-  rewards: any[];
+  preTokenBalances: TokenBalance[];
+  rewards: unknown[];
   status: Status;
 }
 
@@ -45,7 +45,7 @@ export interface Info {
   rentSysvar?: string;
 }
 
-export interface PostTokenBalance {
+export interface TokenBalance {
   accountIndex: number;
   mint: string;
   owner: string;
@@ -58,23 +58,8 @@ export interface UiTokenAmount {
   uiAmount: number;
   uiAmountString: string;
 }
-
-export interface PreTokenBalance {
-  accountIndex: number;
-  mint: string;
-  owner: string;
-  uiTokenAmount: UiTokenAmount2;
-}
-
-export interface UiTokenAmount2 {
-  amount: string;
-  decimals: number;
-  uiAmount: number;
-  uiAmountString: string;
-}
-
 export interface Status {
-  Ok: any;
+  Ok: unknown;
 }
 
 export interface Transaction {

@@ -1,14 +1,17 @@
-import type { RawTransaction } from "./types";
-import { tryFetching } from "./lib/net";
 import { sendJSON } from "@gootools/cloudflare-stuff";
+import { tryFetching } from "./lib/net";
+import type { RawTransaction } from "./types";
 
 declare const TOKENS: KVNamespace;
+
+const mintCache = {};
 
 export const parseTransaction = async (signature: string) => {
   const raw = await tryFetching<RawTransaction>({
     method: "getTransaction",
     params: [signature, "jsonParsed"],
   });
+
   const changes = {};
 
   const missingOwners = Array.from(
@@ -33,7 +36,6 @@ export const parseTransaction = async (signature: string) => {
     owners[missingOwners[i]] = a.data.parsed.info.owner;
   });
 
-  // raw.meta.postTokenBalances.forEach((po) => {
   for (const po of raw.meta.postTokenBalances) {
     const prev = raw.meta.preTokenBalances.find(
       (p) => p.accountIndex === po.accountIndex
@@ -57,18 +59,22 @@ export const parseTransaction = async (signature: string) => {
 
       if (difference > 0) {
         changes[owner] ??= [];
-        changes[owner].push(`${verb} ${difference} ${await mint(po.mint)}`);
+        changes[owner].push(
+          `${verb} ${difference} ${await mintSymbolOrAddress(po.mint)}`
+        );
       }
     } else if (po.uiTokenAmount.uiAmount > 0) {
       changes[owner] ??= [];
       changes[owner].push(
-        `RECEIVED ${po.uiTokenAmount.uiAmountString} ${await mint(po.mint)}`
+        `RECEIVED ${
+          po.uiTokenAmount.uiAmountString
+        } ${await mintSymbolOrAddress(po.mint)}`
       );
     }
   }
 
   raw.meta.postBalances.forEach((po, i) => {
-    // ignore if owner is Token program
+    // TODO: ignore if owner is Token program?
     if (raw.meta.preBalances[i] !== po) {
       const { pubkey } = raw.transaction.message.accountKeys[i];
 
@@ -91,7 +97,34 @@ export const parseTransaction = async (signature: string) => {
   });
 };
 
-const mint = async (mintAddress: string) => {
-  const tokenList: any = await TOKENS.get("list", { type: "json" });
-  return tokenList?.tokens[mintAddress]?.symbol ?? mintAddress;
+const mintSymbolOrAddress = async (mintAddress: string) => {
+  // TODO: make cache async friendly
+  if (mintCache[mintAddress]) return mintCache[mintAddress];
+
+  let result: any;
+  const tokenList: Record<string, any> | null = await TOKENS.get("list", {
+    type: "json",
+  });
+  if (tokenList?.tokens[mintAddress]?.symbol) {
+    result = tokenList.tokens[mintAddress].symbol;
+  } else {
+    try {
+      const url = `https://metaplex-api.goo.tools/${mintAddress}`;
+      console.log({ url });
+      const res = await fetch(url, {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      const metadata: any = await res.json();
+      console.log({ metadata });
+      result = metadata.name;
+    } catch (err) {
+      console.error(err);
+      result = mintAddress;
+    }
+  }
+
+  mintCache[mintAddress] = result;
+  return result;
 };
