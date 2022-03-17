@@ -1,0 +1,4 @@
+{
+  "name": "solana",
+  "typings": "solana.d.ts"
+}

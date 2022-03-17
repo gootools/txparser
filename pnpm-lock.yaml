@@ -2,8 +2,8 @@ lockfileVersion: 5.3
 
 specifiers:
   '@cloudflare/workers-types': ^3.4.0
-  '@gootools/cloudflare-stuff': ^0.0.2
-  '@gootools/solana-stuff': ^0.0.10
+  '@gootools/cloudflare-stuff': ^0.0.3
+  '@gootools/solana-stuff': ^0.0.11
   '@types/jest': ^27.4.1
   '@types/service-worker-mock': ^2.0.1
   '@typescript-eslint/eslint-plugin': ^5.15.0
@@ -22,8 +22,8 @@ specifiers:
   webpack-cli: ^4.9.2
 
 dependencies:
-  '@gootools/cloudflare-stuff': 0.0.2
-  '@gootools/solana-stuff': 0.0.10
+  '@gootools/cloudflare-stuff': 0.0.3
+  '@gootools/solana-stuff': 0.0.11
 
 devDependencies:
   '@cloudflare/workers-types': 3.4.0
@@ -402,12 +402,12 @@ packages:
       - supports-color
     dev: true
 
-  /@gootools/cloudflare-stuff/0.0.2:
-    resolution: {integrity: sha512-Cf55g0Y/jRXORQHPke6NrIiur8GfKBY6YSQl8hPG7tObr71tbm9c9osVORwh687JtoZPHcnBT8h7Sp27jReAXA==}
+  /@gootools/cloudflare-stuff/0.0.3:
+    resolution: {integrity: sha512-KiZaAkmcYrz3ygBXNwjXg1MVRank5Y5rRVbYIXSEFDV63yNhEqQP2NlwSwRbHO0pOEUnwhFagtNwJl8qFeEvsA==}
     dev: false
 
-  /@gootools/solana-stuff/0.0.10:
-    resolution: {integrity: sha512-KOGSQncAo0Km0Z5aK3N2ol+vh4PjX/U3CjRcu9ZKp7yoUxnajHMIfgsaa+xwNjQCl1vL5q2JsknrtKgbopzdcQ==}
+  /@gootools/solana-stuff/0.0.11:
+    resolution: {integrity: sha512-nYTuKPqLkwqagObEKRext92kzD2gOF8loUNfkSiKKhzu0g3lB8GoiIkpemiS/LOK+xjrn5k6DlvnkSTgsdxh/Q==}
     peerDependencies:
       '@solana/web3.js': ^1
       bn.js: ^5

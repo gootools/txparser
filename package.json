@@ -37,7 +37,7 @@
     "webpack-cli": "^4.9.2"
   },
   "dependencies": {
-    "@gootools/cloudflare-stuff": "^0.0.2",
-    "@gootools/solana-stuff": "^0.0.10"
+    "@gootools/cloudflare-stuff": "^0.0.3",
+    "@gootools/solana-stuff": "^0.0.11"
   }
 }

@@ -1,11 +1,11 @@
-export interface RawTransaction {
+interface RawTransaction {
   blockTime: number;
   meta: Meta;
   slot: number;
   transaction: Transaction;
 }
 
-export interface Meta {
+interface Meta {
   err: unknown;
   fee: number;
   innerInstructions: InnerInstruction[];
@@ -18,23 +18,23 @@ export interface Meta {
   status: Status;
 }
 
-export interface InnerInstruction {
+interface InnerInstruction {
   index: number;
   instructions: Instruction[];
 }
 
-export interface Instruction {
+interface Instruction {
   parsed: Parsed;
   program: string;
   programId: string;
 }
 
-export interface Parsed {
+interface Parsed {
   info: Info;
   type: string;
 }
 
-export interface Info {
+interface Info {
   destination?: string;
   lamports?: number;
   source?: string;
@@ -45,41 +45,41 @@ export interface Info {
   rentSysvar?: string;
 }
 
-export interface TokenBalance {
+interface TokenBalance {
   accountIndex: number;
   mint: string;
   owner: string;
   uiTokenAmount: UiTokenAmount;
 }
 
-export interface UiTokenAmount {
+interface UiTokenAmount {
   amount: string;
   decimals: number;
   uiAmount: number;
   uiAmountString: string;
 }
-export interface Status {
+interface Status {
   Ok: unknown;
 }
 
-export interface Transaction {
+interface Transaction {
   message: Message;
   signatures: string[];
 }
 
-export interface Message {
+interface Message {
   accountKeys: AccountKey[];
   instructions: Instruction2[];
   recentBlockhash: string;
 }
 
-export interface AccountKey {
+interface AccountKey {
   pubkey: string;
   signer: boolean;
   writable: boolean;
 }
 
-export interface Instruction2 {
+interface Instruction2 {
   accounts?: string[];
   data?: string;
   programId: string;
@@ -87,12 +87,12 @@ export interface Instruction2 {
   program?: string;
 }
 
-export interface Parsed2 {
+interface Parsed2 {
   info: Info2;
   type: string;
 }
 
-export interface Info2 {
+interface Info2 {
   authority?: string;
   destination?: string;
   mint: string;
@@ -105,7 +105,7 @@ export interface Info2 {
   wallet?: string;
 }
 
-export interface TokenAmount {
+interface TokenAmount {
   amount: string;
   decimals: number;
   uiAmount: number;

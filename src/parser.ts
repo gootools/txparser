@@ -1,10 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { sendJSON } from "@gootools/cloudflare-stuff/dist/mjs/workers/sendJSON";
 import { tryFetching } from "@gootools/solana-stuff/dist/mjs/tryFetching";
-import type { RawTransaction } from "./types";
 
 declare const TOKENS: KVNamespace;
-
-const mintCache = {};
 
 const rpcFetch = tryFetching({
   "https://solana--mainnet.datahub.figment.io/apikey/2bc32aa843d879a0bf1fa63a07efc887/": 4,
@@ -14,14 +12,14 @@ const rpcFetch = tryFetching({
 });
 
 export const parseTransaction = async (signature: string) => {
-  const { result: raw } = (await rpcFetch<RawTransaction>({
+  const { result: raw } = await rpcFetch<RawTransaction>({
     method: "getTransaction",
     params: [signature, "jsonParsed"],
-  })) as any;
+  });
 
-  const changes = {};
+  const changes: Record<string, Array<string>> = {};
 
-  const missingOwners = Array.from(
+  const missingOwnerPubkeys = Array.from(
     new Set([
       ...raw.meta.preTokenBalances
         .filter((pre) => !pre.owner)
@@ -32,15 +30,15 @@ export const parseTransaction = async (signature: string) => {
     ])
   );
 
-  const owners = {};
-
   const { result: accounts } = await rpcFetch<any>({
     method: "getMultipleAccounts",
-    params: [missingOwners, { encoding: "jsonParsed" }],
+    params: [missingOwnerPubkeys, { encoding: "jsonParsed" }],
   });
 
+  const ownerOfPubkey: Record<string, string> = {};
+
   accounts.value.forEach((a, i) => {
-    owners[missingOwners[i]] = a.data.parsed.info.owner;
+    ownerOfPubkey[missingOwnerPubkeys[i]] = a.data.parsed.info.owner;
   });
 
   for (const po of raw.meta.postTokenBalances) {
@@ -50,7 +48,11 @@ export const parseTransaction = async (signature: string) => {
 
     const owner =
       po.owner ??
-      owners[raw.transaction.message.accountKeys[po.accountIndex].pubkey];
+      ownerOfPubkey[
+        raw.transaction.message.accountKeys[po.accountIndex].pubkey
+      ];
+
+    const getMint = mintSymbolOrAddress({});
 
     if (prev) {
       const verb =
@@ -66,17 +68,25 @@ export const parseTransaction = async (signature: string) => {
 
       if (difference > 0) {
         changes[owner] ??= [];
-        changes[owner].push(
-          `${verb} ${difference} ${await mintSymbolOrAddress(po.mint)}`
-        );
+        const mint = await getMint(po.mint);
+        if (mint.includes("'") && difference === 1) {
+          changes[owner].push(`${verb} ${mint}`);
+        } else {
+          changes[owner].push(`${verb} ${difference} ${mint}`);
+        }
       }
     } else if (po.uiTokenAmount.uiAmount > 0) {
       changes[owner] ??= [];
-      changes[owner].push(
-        `RECEIVED ${
-          po.uiTokenAmount.uiAmountString
-        } ${await mintSymbolOrAddress(po.mint)}`
-      );
+      const mint = await getMint(po.mint);
+      if (mint.includes("'") && po.uiTokenAmount.uiAmountString === "1") {
+        changes[owner].push(`RECEIVED ${await getMint(po.mint)}`);
+      } else {
+        changes[owner].push(
+          `RECEIVED ${po.uiTokenAmount.uiAmountString} ${await getMint(
+            po.mint
+          )}`
+        );
+      }
     }
   }
 
@@ -85,15 +95,36 @@ export const parseTransaction = async (signature: string) => {
     if (raw.meta.preBalances[i] !== po) {
       const { pubkey } = raw.transaction.message.accountKeys[i];
 
-      const difference =
+      let difference =
         Math.abs(Number(po) - Number(raw.meta.preBalances[i])) / 10 ** 9;
 
       const verb = po < raw.meta.preBalances[i] ? "SENT" : "RECEIVED";
 
-      changes[pubkey] ??= [];
-      changes[pubkey].push(`${verb} ${difference} SOL`);
+      if (verb === "SENT" && raw.meta.fee) {
+        const fullFee = raw.meta.fee / 10 ** 9;
+        difference -= fullFee;
+        changes[pubkey] ??= [];
+        changes[pubkey].push(`FEE ${fullFee} SOL`);
+      }
+
+      if (difference > 0) {
+        changes[pubkey] ??= [];
+        changes[pubkey].push(`${verb} ${difference} SOL`);
+      }
     }
   });
+
+  try {
+    raw.transaction.message.instructions
+      .filter((i) => i.program === "spl-memo" && i.parsed)
+      .forEach(({ parsed }: any) => {
+        Object.keys(changes).forEach((k) => {
+          changes[k].push(`MEMO [${parsed}]`);
+        });
+      });
+  } catch (err) {
+    console.error(err);
+  }
 
   return sendJSON({
     signature,
@@ -104,34 +135,33 @@ export const parseTransaction = async (signature: string) => {
   });
 };
 
-const mintSymbolOrAddress = async (mintAddress: string) => {
-  // TODO: make cache async friendly
-  if (mintCache[mintAddress]) return mintCache[mintAddress];
+const mintSymbolOrAddress =
+  (mintCache = {}) =>
+  async (mintAddress: string): Promise<string> => {
+    // TODO: make cache async friendly
+    if (mintCache[mintAddress]) return mintCache[mintAddress];
 
-  let result: any;
-  const tokenList: Record<string, any> | null = await TOKENS.get("list", {
-    type: "json",
-  });
-  if (tokenList?.tokens[mintAddress]?.symbol) {
-    result = tokenList.tokens[mintAddress].symbol;
-  } else {
-    try {
-      const url = `https://metaplex-api.goo.tools/${mintAddress}`;
-      console.log({ url });
-      const res = await fetch(url, {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      const metadata: any = await res.json();
-      console.log({ metadata });
-      result = metadata.name;
-    } catch (err) {
-      console.error(err);
-      result = mintAddress;
+    let result: any;
+    const tokenList: Record<string, any> | null = await TOKENS.get("list", {
+      type: "json",
+    });
+    if (tokenList?.tokens[mintAddress]?.symbol) {
+      result = tokenList.tokens[mintAddress].symbol;
+    } else {
+      try {
+        const url = `https://metaplex-api.goo.tools/${mintAddress}`;
+        const res = await fetch(url, {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+        const metadata: any = await res.json();
+        result = `'${metadata.name}'`;
+      } catch (err) {
+        console.error(err);
+        result = mintAddress;
+      }
     }
-  }
-
-  mintCache[mintAddress] = result;
-  return result;
-};
+    mintCache[mintAddress] = result;
+    return result;
+  };
