@@ -1,16 +1,23 @@
-import { sendJSON } from "@gootools/cloudflare-stuff";
-import { tryFetching } from "./lib/net";
+import { sendJSON } from "@gootools/cloudflare-stuff/dist/mjs/workers/sendJSON";
+import { tryFetching } from "@gootools/solana-stuff/dist/mjs/tryFetching";
 import type { RawTransaction } from "./types";
 
 declare const TOKENS: KVNamespace;
 
 const mintCache = {};
 
+const rpcFetch = tryFetching({
+  "https://solana--mainnet.datahub.figment.io/apikey/2bc32aa843d879a0bf1fa63a07efc887/": 4,
+  "https://ssc-dao.genesysgo.net": 4,
+  "https://api.mainnet-beta.solana.com": 2,
+  "https://free.rpcpool.com": 1,
+});
+
 export const parseTransaction = async (signature: string) => {
-  const raw = await tryFetching<RawTransaction>({
+  const { result: raw } = (await rpcFetch<RawTransaction>({
     method: "getTransaction",
     params: [signature, "jsonParsed"],
-  });
+  })) as any;
 
   const changes = {};
 
@@ -27,7 +34,7 @@ export const parseTransaction = async (signature: string) => {
 
   const owners = {};
 
-  const accounts = await tryFetching<any>({
+  const { result: accounts } = await rpcFetch<any>({
     method: "getMultipleAccounts",
     params: [missingOwners, { encoding: "jsonParsed" }],
   });
