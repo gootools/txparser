@@ -17,6 +17,19 @@ export const parseTransaction = async (signature: string) => {
     params: [signature, "jsonParsed"],
   });
 
+  let type: string | undefined = undefined;
+
+  const ixs = raw.transaction.message.instructions.filter((i) => !i.program);
+  if (
+    ixs.length > 0 &&
+    ixs.every(
+      ({ programId }) =>
+        programId === "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP"
+    )
+  ) {
+    type = "dapp:orca-swap";
+  }
+
   const changes: Record<string, Array<string>> = {};
 
   const missingOwnerPubkeys = Array.from(
@@ -130,6 +143,7 @@ export const parseTransaction = async (signature: string) => {
     signature,
     status: raw.meta.err ? "failed" : "success",
     at: new Date(raw.blockTime * 1000).toISOString(),
+    type,
     changes,
     raw,
   });
