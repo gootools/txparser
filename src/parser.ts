@@ -1,14 +1,17 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { sendJSON } from "@gootools/cloudflare-stuff/dist/mjs/workers/sendJSON";
 import { tryFetching } from "@gootools/solana-stuff/dist/mjs/tryFetching";
+import dapps from "./dapps.json";
 
 declare const TOKENS: KVNamespace;
 
 const rpcFetch = tryFetching({
-  "https://solana--mainnet.datahub.figment.io/apikey/2bc32aa843d879a0bf1fa63a07efc887/": 4,
-  "https://ssc-dao.genesysgo.net": 4,
-  "https://api.mainnet-beta.solana.com": 2,
-  "https://free.rpcpool.com": 1,
+  "https://solana-mainnet.phantom.tech/96e7934d918f104366b5742d7613": 100,
+  // "https://hidden-fragrant-sound.solana-mainnet.quiknode.pro/452fef69b9380554003a55cda8b393bdd23653c8/": 100,
+  // "https://solana--mainnet.datahub.figment.io/apikey/2bc32aa843d879a0bf1fa63a07efc887/": 4,
+  // "https://ssc-dao.genesysgo.net": 100,
+  // "https://api.mainnet-beta.solana.com": 2,
+  // "https://free.rpcpool.com": 1,
 });
 
 export const parseTransaction = async (signature: string) => {
@@ -17,21 +20,10 @@ export const parseTransaction = async (signature: string) => {
     params: [signature, "jsonParsed"],
   });
 
-  let type: string | undefined = undefined;
-
-  const ixs = raw.transaction.message.instructions.filter((i) => !i.program);
-  if (
-    ixs.length > 0 &&
-    ixs.every(
-      ({ programId }) =>
-        programId === "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP"
-    )
-  ) {
-    type = "dapp:orca-swap";
-  }
-
   const changes: Record<string, Array<string>> = {};
 
+  // XXX: meta.[pre|post]TokenBalances.owner[*] might be missing sometimes, see
+  // https://phantom-wallet.slack.com/archives/C0363QKRC5B/p1647633283451949
   const missingOwnerPubkeys = Array.from(
     new Set([
       ...raw.meta.preTokenBalances
@@ -49,7 +41,6 @@ export const parseTransaction = async (signature: string) => {
   });
 
   const ownerOfPubkey: Record<string, string> = {};
-
   accounts.value.forEach((a, i) => {
     ownerOfPubkey[missingOwnerPubkeys[i]] = a.data.parsed.info.owner;
   });
@@ -103,6 +94,24 @@ export const parseTransaction = async (signature: string) => {
     }
   }
 
+  const ixs = Array.from(
+    new Set(
+      raw.transaction.message.instructions
+        .filter((i) => !i.program)
+        .map((i) => i.programId)
+    )
+  );
+
+  let transactionType: typeof dapps[keyof typeof dapps][number] | undefined;
+  if (
+    raw.meta.preTokenBalances.length >= 2 &&
+    raw.meta.postTokenBalances.length >= 2 &&
+    ixs.length === 1 &&
+    dapps[ixs[0]]
+  ) {
+    transactionType = dapps[ixs[0]];
+  }
+
   raw.meta.postBalances.forEach((po, i) => {
     // TODO: ignore if owner is Token program?
     if (raw.meta.preBalances[i] !== po) {
@@ -143,7 +152,7 @@ export const parseTransaction = async (signature: string) => {
     signature,
     status: raw.meta.err ? "failed" : "success",
     at: new Date(raw.blockTime * 1000).toISOString(),
-    type,
+    type: transactionType,
     changes,
     raw,
   });
@@ -172,7 +181,7 @@ const mintSymbolOrAddress =
         const metadata: any = await res.json();
         result = `'${metadata.name}'`;
       } catch (err) {
-        console.error(err);
+        // console.error(err);
         result = mintAddress;
       }
     }

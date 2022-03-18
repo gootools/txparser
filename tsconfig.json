@@ -1,17 +1,17 @@
 {
   "compilerOptions": {
-    "outDir": "./dist",
-    "module": "commonjs",
-    "target": "esnext",
-    "lib": ["esnext"],
     "alwaysStrict": true,
-    "strict": true,
-    "preserveConstEnums": true,
-    "moduleResolution": "node",
-    "sourceMap": true,
     "esModuleInterop": true,
-
+    "lib": ["esnext"],
+    "module": "commonjs",
+    "moduleResolution": "node",
     "noImplicitAny": false,
+    "outDir": "./dist",
+    "preserveConstEnums": true,
+    "resolveJsonModule": true,
+    "sourceMap": true,
+    "strict": true,
+    "target": "esnext",
     "types": ["@cloudflare/workers-types"]
   },
   "include": ["src", "types"],
