@@ -1,26 +1,17 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { sendJSON } from "@gootools/cloudflare-stuff/dist/mjs/workers/sendJSON";
 import { tryFetching } from "@gootools/solana-stuff/dist/mjs/tryFetching";
-import dapps from "./dapps.json";
+import { config } from "./config";
 
 declare const TOKENS: KVNamespace;
 
-const rpcFetch = tryFetching({
-  "https://solana-mainnet.phantom.tech/96e7934d918f104366b5742d7613": 100,
-  // "https://hidden-fragrant-sound.solana-mainnet.quiknode.pro/452fef69b9380554003a55cda8b393bdd23653c8/": 100,
-  // "https://solana--mainnet.datahub.figment.io/apikey/2bc32aa843d879a0bf1fa63a07efc887/": 4,
-  // "https://ssc-dao.genesysgo.net": 100,
-  // "https://api.mainnet-beta.solana.com": 2,
-  // "https://free.rpcpool.com": 1,
-});
+const rpcFetch = tryFetching(config.rpcs);
 
 export const parseTransaction = async (signature: string) => {
   const { result: raw } = await rpcFetch<RawTransaction>({
     method: "getTransaction",
     params: [signature, "jsonParsed"],
   });
-
-  const changes: Record<string, Array<string>> = {};
 
   // XXX: meta.[pre|post]TokenBalances.owner[*] might be missing sometimes, see
   // https://phantom-wallet.slack.com/archives/C0363QKRC5B/p1647633283451949
@@ -34,66 +25,77 @@ export const parseTransaction = async (signature: string) => {
         .map((p) => raw.transaction.message.accountKeys[p.accountIndex].pubkey),
     ])
   );
-
   const { result: accounts } = await rpcFetch<any>({
     method: "getMultipleAccounts",
     params: [missingOwnerPubkeys, { encoding: "jsonParsed" }],
   });
-
   const ownerOfPubkey: Record<string, string> = {};
   accounts.value.forEach((a, i) => {
     ownerOfPubkey[missingOwnerPubkeys[i]] = a.data.parsed.info.owner;
   });
 
-  for (const po of raw.meta.postTokenBalances) {
+  // check for token balance changes (SPL/NFT transfer) --------
+
+  const changes: Record<string, Array<string>> = {};
+
+  for (const postTokenBalance of raw.meta.postTokenBalances) {
     const prev = raw.meta.preTokenBalances.find(
-      (p) => p.accountIndex === po.accountIndex
+      (p) => p.accountIndex === postTokenBalance.accountIndex
     );
 
     const owner =
-      po.owner ??
+      postTokenBalance.owner ??
       ownerOfPubkey[
-        raw.transaction.message.accountKeys[po.accountIndex].pubkey
+        raw.transaction.message.accountKeys[postTokenBalance.accountIndex]
+          .pubkey
       ];
 
     const getMint = mintSymbolOrAddress({});
 
     if (prev) {
       const verb =
-        prev.uiTokenAmount.uiAmount > po.uiTokenAmount.uiAmount
+        prev.uiTokenAmount.uiAmount > postTokenBalance.uiTokenAmount.uiAmount
           ? "SENT"
           : "RECEIVED";
 
       const difference =
         Math.abs(
-          Number(prev.uiTokenAmount.amount) - Number(po.uiTokenAmount.amount)
+          Number(prev.uiTokenAmount.amount) -
+            Number(postTokenBalance.uiTokenAmount.amount)
         ) /
-        10 ** po.uiTokenAmount.decimals;
+        10 ** postTokenBalance.uiTokenAmount.decimals;
 
       if (difference > 0) {
         changes[owner] ??= [];
-        const mint = await getMint(po.mint);
+        const mint = await getMint(postTokenBalance.mint);
         if (mint.includes("'") && difference === 1) {
           changes[owner].push(`${verb} ${mint}`);
         } else {
           changes[owner].push(`${verb} ${difference} ${mint}`);
         }
       }
-    } else if (po.uiTokenAmount.uiAmount > 0) {
+    } else if (postTokenBalance.uiTokenAmount.uiAmount > 0) {
       changes[owner] ??= [];
-      const mint = await getMint(po.mint);
-      if (mint.includes("'") && po.uiTokenAmount.uiAmountString === "1") {
-        changes[owner].push(`RECEIVED ${await getMint(po.mint)}`);
+      const mint = await getMint(postTokenBalance.mint);
+      if (
+        mint.includes("'") &&
+        postTokenBalance.uiTokenAmount.uiAmountString === "1"
+      ) {
+        changes[owner].push(`RECEIVED ${await getMint(postTokenBalance.mint)}`);
       } else {
         changes[owner].push(
-          `RECEIVED ${po.uiTokenAmount.uiAmountString} ${await getMint(
-            po.mint
-          )}`
+          `RECEIVED ${
+            postTokenBalance.uiTokenAmount.uiAmountString
+          } ${await getMint(postTokenBalance.mint)}`
         );
       }
     }
   }
 
+  // check if a swap -------------------------------------------
+
+  // if more than 1 token balance changes and interacted only with
+  // a known program e.g. Orca DEX Swap v2, assume it is that program
   const ixs = Array.from(
     new Set(
       raw.transaction.message.instructions
@@ -101,26 +103,30 @@ export const parseTransaction = async (signature: string) => {
         .map((i) => i.programId)
     )
   );
-
-  let transactionType: typeof dapps[keyof typeof dapps][number] | undefined;
+  let transactionType:
+    | typeof config.dapps[keyof typeof config.dapps][number]
+    | undefined;
   if (
     raw.meta.preTokenBalances.length >= 2 &&
     raw.meta.postTokenBalances.length >= 2 &&
     ixs.length === 1 &&
-    dapps[ixs[0]]
+    config.dapps[ixs[0]]
   ) {
-    transactionType = dapps[ixs[0]];
+    transactionType = config.dapps[ixs[0]];
   }
 
-  raw.meta.postBalances.forEach((po, i) => {
+  // check if a sol transfer -----------------------------------
+
+  raw.meta.postBalances.forEach((postBalance, i) => {
     // TODO: ignore if owner is Token program?
-    if (raw.meta.preBalances[i] !== po) {
+    if (raw.meta.preBalances[i] !== postBalance) {
       const { pubkey } = raw.transaction.message.accountKeys[i];
 
       let difference =
-        Math.abs(Number(po) - Number(raw.meta.preBalances[i])) / 10 ** 9;
+        Math.abs(Number(postBalance) - Number(raw.meta.preBalances[i])) /
+        10 ** 9;
 
-      const verb = po < raw.meta.preBalances[i] ? "SENT" : "RECEIVED";
+      const verb = postBalance < raw.meta.preBalances[i] ? "SENT" : "RECEIVED";
 
       if (verb === "SENT" && raw.meta.fee) {
         const fullFee = raw.meta.fee / 10 ** 9;
@@ -136,10 +142,12 @@ export const parseTransaction = async (signature: string) => {
     }
   });
 
+  // check if memo program was used ----------------------------
+
   try {
     raw.transaction.message.instructions
-      .filter((i) => i.program === "spl-memo" && i.parsed)
-      .forEach(({ parsed }: any) => {
+      .filter(({ program, parsed }) => program === "spl-memo" && parsed)
+      .forEach(({ parsed }) => {
         Object.keys(changes).forEach((k) => {
           changes[k].push(`MEMO [${parsed}]`);
         });
@@ -168,9 +176,12 @@ const mintSymbolOrAddress =
     const tokenList: Record<string, any> | null = await TOKENS.get("list", {
       type: "json",
     });
+
+    // if in SPL token registry then return that metadata from cloudflare KV
     if (tokenList?.tokens[mintAddress]?.symbol) {
       result = tokenList.tokens[mintAddress].symbol;
     } else {
+      // if not a known SPL token, check if it's an NFT
       try {
         const url = `https://metaplex-api.goo.tools/${mintAddress}`;
         const res = await fetch(url, {
@@ -181,7 +192,7 @@ const mintSymbolOrAddress =
         const metadata: any = await res.json();
         result = `'${metadata.name}'`;
       } catch (err) {
-        // console.error(err);
+        // not an NFT or known SPL token, return raw mint address
         result = mintAddress;
       }
     }
